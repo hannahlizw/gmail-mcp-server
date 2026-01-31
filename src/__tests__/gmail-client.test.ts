@@ -6,6 +6,9 @@ import {
   mockMultipartMessageResponse,
   mockHtmlOnlyMessageResponse,
   mockMessageListResponse,
+  mockDraftCreateResponse,
+  mockDraftListResponse,
+  mockDraftGetResponse,
   createMockGmailApi,
 } from "./mocks/gmail-api.js";
 
@@ -139,6 +142,66 @@ describe("GmailApiClient", () => {
           maxResults: 5,
         })
       );
+    });
+  });
+
+  describe("createDraft", () => {
+    it("returns draft ID and web link", async () => {
+      mockGmail.users.drafts.create.mockResolvedValue(mockDraftCreateResponse);
+
+      const result = await client.createDraft({
+        to: "recipient@example.com",
+        subject: "Test Subject",
+        body: "Test body",
+      });
+
+      expect(result.id).toBe("draft123");
+      expect(result.webLink).toContain("mail.google.com");
+      expect(result.webLink).toContain("draftmsg123");
+    });
+
+    it("encodes message as base64url", async () => {
+      mockGmail.users.drafts.create.mockResolvedValue(mockDraftCreateResponse);
+
+      await client.createDraft({
+        to: "recipient@example.com",
+        subject: "Test",
+        body: "Body",
+      });
+
+      const call = mockGmail.users.drafts.create.mock.calls[0][0];
+      expect(call.requestBody.message.raw).toBeDefined();
+      // Verify it's valid base64url (no +, /, or = padding issues)
+      expect(call.requestBody.message.raw).toMatch(/^[A-Za-z0-9_-]+$/);
+    });
+
+    it("includes threadId for replies", async () => {
+      mockGmail.users.drafts.create.mockResolvedValue(mockDraftCreateResponse);
+
+      await client.createDraft({
+        to: "recipient@example.com",
+        subject: "Re: Test",
+        body: "Reply body",
+        threadId: "thread123",
+        inReplyTo: "original-msg-id",
+      });
+
+      const call = mockGmail.users.drafts.create.mock.calls[0][0];
+      expect(call.requestBody.message.threadId).toBe("thread123");
+    });
+  });
+
+  describe("listDrafts", () => {
+    it("returns formatted draft list", async () => {
+      mockGmail.users.drafts.list.mockResolvedValue(mockDraftListResponse);
+      mockGmail.users.drafts.get.mockResolvedValue(mockDraftGetResponse);
+
+      const results = await client.listDrafts(10);
+
+      expect(results).toHaveLength(2);
+      expect(results[0].id).toBe("draft123");
+      expect(results[0].message.to).toBe("recipient@example.com");
+      expect(results[0].message.subject).toBe("Draft Subject");
     });
   });
 });
