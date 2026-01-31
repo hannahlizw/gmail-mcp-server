@@ -9,6 +9,11 @@ import {
   mockDraftCreateResponse,
   mockDraftListResponse,
   mockDraftGetResponse,
+  mockLabelsListResponse,
+  mockLabelGetResponse,
+  mockLabelCreateResponse,
+  mockFiltersListResponse,
+  mockFilterCreateResponse,
   createMockGmailApi,
 } from "./mocks/gmail-api.js";
 
@@ -202,6 +207,102 @@ describe("GmailApiClient", () => {
       expect(results[0].id).toBe("draft123");
       expect(results[0].message.to).toBe("recipient@example.com");
       expect(results[0].message.subject).toBe("Draft Subject");
+    });
+  });
+
+  describe("listLabels", () => {
+    it("returns labels with message counts", async () => {
+      mockGmail.users.labels.list.mockResolvedValue(mockLabelsListResponse);
+      mockGmail.users.labels.get
+        .mockResolvedValueOnce(mockLabelGetResponse("INBOX", "INBOX", "system"))
+        .mockResolvedValueOnce(mockLabelGetResponse("UNREAD", "UNREAD", "system"))
+        .mockResolvedValueOnce(mockLabelGetResponse("Label_1", "Work", "user"));
+
+      const results = await client.listLabels();
+
+      expect(results).toHaveLength(3);
+      const workLabel = results.find((l) => l.name === "Work");
+      expect(workLabel).toBeDefined();
+      expect(workLabel!.type).toBe("user");
+      expect(workLabel!.messagesTotal).toBe(42);
+    });
+  });
+
+  describe("createLabel", () => {
+    it("creates label and returns result", async () => {
+      mockGmail.users.labels.create.mockResolvedValue(mockLabelCreateResponse);
+
+      const result = await client.createLabel("New Label");
+
+      expect(result.id).toBe("Label_new");
+      expect(result.name).toBe("New Label");
+      expect(mockGmail.users.labels.create).toHaveBeenCalledWith({
+        userId: "me",
+        requestBody: expect.objectContaining({ name: "New Label" }),
+      });
+    });
+  });
+
+  describe("modifyMessageLabels", () => {
+    it("adds and removes specified labels", async () => {
+      mockGmail.users.messages.modify.mockResolvedValue({});
+
+      await client.modifyMessageLabels("msg123", ["Label_1"], ["UNREAD"]);
+
+      expect(mockGmail.users.messages.modify).toHaveBeenCalledWith({
+        userId: "me",
+        id: "msg123",
+        requestBody: {
+          addLabelIds: ["Label_1"],
+          removeLabelIds: ["UNREAD"],
+        },
+      });
+    });
+  });
+
+  describe("listFilters", () => {
+    it("returns parsed filters", async () => {
+      mockGmail.users.settings.filters.list.mockResolvedValue(mockFiltersListResponse);
+
+      const results = await client.listFilters();
+
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe("filter123");
+      expect(results[0].criteria.from).toBe("newsletter@example.com");
+      expect(results[0].action.addLabelIds).toContain("Label_1");
+    });
+  });
+
+  describe("createFilter", () => {
+    it("creates filter with criteria and action", async () => {
+      mockGmail.users.settings.filters.create.mockResolvedValue(mockFilterCreateResponse);
+
+      const result = await client.createFilter({
+        criteria: { from: "test@example.com" },
+        action: { addLabelIds: ["Label_1"] },
+      });
+
+      expect(result.id).toBe("filter_new");
+      expect(mockGmail.users.settings.filters.create).toHaveBeenCalledWith({
+        userId: "me",
+        requestBody: {
+          criteria: { from: "test@example.com" },
+          action: { addLabelIds: ["Label_1"] },
+        },
+      });
+    });
+  });
+
+  describe("deleteFilter", () => {
+    it("calls delete API", async () => {
+      mockGmail.users.settings.filters.delete.mockResolvedValue({});
+
+      await client.deleteFilter("filter123");
+
+      expect(mockGmail.users.settings.filters.delete).toHaveBeenCalledWith({
+        userId: "me",
+        id: "filter123",
+      });
     });
   });
 });
