@@ -34,12 +34,19 @@ describe("GmailApiClient", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset mock implementations
-    Object.values(mockGmail.users.messages).forEach((fn) => {
-      if (typeof fn === "function" && "mockReset" in fn) {
-        (fn as any).mockReset();
-      }
-    });
+    // Reset all mock implementations to prevent test pollution
+    const resetMocks = (obj: Record<string, unknown>) => {
+      Object.values(obj).forEach((fn) => {
+        if (typeof fn === "function" && "mockReset" in fn) {
+          (fn as ReturnType<typeof vi.fn>).mockReset();
+        }
+      });
+    };
+    resetMocks(mockGmail.users.messages);
+    resetMocks(mockGmail.users.drafts);
+    resetMocks(mockGmail.users.labels);
+    resetMocks(mockGmail.users.settings.filters);
+    mockGmail.users.getProfile.mockReset();
     client = new GmailApiClient({} as any);
   });
 
