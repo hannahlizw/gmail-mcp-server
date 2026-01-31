@@ -14,6 +14,7 @@ import {
   mockLabelCreateResponse,
   mockFiltersListResponse,
   mockFilterCreateResponse,
+  mockProfileResponse,
   createMockGmailApi,
 } from "./mocks/gmail-api.js";
 
@@ -303,6 +304,51 @@ describe("GmailApiClient", () => {
         userId: "me",
         id: "filter123",
       });
+    });
+  });
+
+  describe("markAsRead", () => {
+    it("removes UNREAD label", async () => {
+      mockGmail.users.messages.modify.mockResolvedValue({});
+
+      await client.markAsRead("msg123");
+
+      expect(mockGmail.users.messages.modify).toHaveBeenCalledWith({
+        userId: "me",
+        id: "msg123",
+        requestBody: {
+          addLabelIds: [],
+          removeLabelIds: ["UNREAD"],
+        },
+      });
+    });
+  });
+
+  describe("markAsUnread", () => {
+    it("adds UNREAD label", async () => {
+      mockGmail.users.messages.modify.mockResolvedValue({});
+
+      await client.markAsUnread("msg123");
+
+      expect(mockGmail.users.messages.modify).toHaveBeenCalledWith({
+        userId: "me",
+        id: "msg123",
+        requestBody: {
+          addLabelIds: ["UNREAD"],
+          removeLabelIds: [],
+        },
+      });
+    });
+  });
+
+  describe("getProfile", () => {
+    it("returns email and message count", async () => {
+      mockGmail.users.getProfile.mockResolvedValue(mockProfileResponse);
+
+      const result = await client.getProfile();
+
+      expect(result.email).toBe("user@example.com");
+      expect(result.messagesTotal).toBe(1234);
     });
   });
 });
