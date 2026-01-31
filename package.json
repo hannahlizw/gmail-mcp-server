@@ -11,7 +11,9 @@
     "build": "tsc",
     "start": "node build/index.js",
     "dev": "tsc --watch",
-    "setup": "npx tsx scripts/setup.ts"
+    "setup": "npx tsx scripts/setup.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "mcp",
@@ -27,6 +29,7 @@
   "devDependencies": {
     "@types/node": "^25.1.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }
