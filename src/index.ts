@@ -10,10 +10,10 @@ let gmailClient: GmailApiClient | null = null;
 
 // === SECURITY HELPERS ===
 
-// Validate Gmail message/thread IDs (hexadecimal strings)
+// Validate Gmail message/thread IDs (hexadecimal strings, up to 64 chars)
 const MESSAGE_ID_REGEX = /^[a-f0-9]+$/i;
 function isValidMessageId(id: string): boolean {
-  return MESSAGE_ID_REGEX.test(id) && id.length > 0 && id.length <= 32;
+  return MESSAGE_ID_REGEX.test(id) && id.length > 0 && id.length <= 64;
 }
 
 // Validate label IDs (system labels are uppercase, user labels are "Label_" + number)
@@ -105,7 +105,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `Failed to start authentication: ${err instanceof Error ? err.message : String(err)}`
+          text: sanitizeError(err, "Failed to start authentication")
         }]
       };
     }
@@ -133,7 +133,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `Failed to complete authentication: ${err instanceof Error ? err.message : String(err)}`
+          text: sanitizeError(err, "Failed to complete authentication")
         }]
       };
     }

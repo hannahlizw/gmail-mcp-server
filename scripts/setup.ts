@@ -92,6 +92,15 @@ async function main() {
 
     if (url.pathname === "/oauth2callback") {
       const code = url.searchParams.get("code");
+      const error = url.searchParams.get("error");
+
+      // Handle OAuth error responses (user denied access, etc.)
+      if (error) {
+        res.writeHead(400, { "Content-Type": "text/html" });
+        res.end(`<h1>Authorization Failed</h1><p>${escapeHtml(error)}</p>`);
+        console.error("OAuth error:", error);
+        return;
+      }
 
       if (code) {
         try {
