@@ -2,6 +2,15 @@
 
 A local MCP server that connects Claude Code to your Gmail account for reading, searching, drafting, and managing emails.
 
+## Required OAuth Scopes
+
+| Scope | Purpose |
+|-------|---------|
+| `gmail.readonly` | Read emails and search inbox |
+| `gmail.compose` | Create drafts |
+| `gmail.modify` | Modify labels, mark read/unread |
+| `gmail.settings.basic` | Read and create filters |
+
 ## Features
 
 - **Read & Search**: List emails, search with Gmail's powerful query syntax
