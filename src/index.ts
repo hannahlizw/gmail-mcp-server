@@ -8,6 +8,45 @@ import { GmailApiClient } from "./gmail-client.js";
 
 let gmailClient: GmailApiClient | null = null;
 
+// === SECURITY HELPERS ===
+
+// Validate Gmail message/thread IDs (hexadecimal strings)
+const MESSAGE_ID_REGEX = /^[a-f0-9]+$/i;
+function isValidMessageId(id: string): boolean {
+  return MESSAGE_ID_REGEX.test(id) && id.length > 0 && id.length <= 32;
+}
+
+// Validate label IDs (system labels are uppercase, user labels are "Label_" + number)
+const LABEL_ID_REGEX = /^([A-Z_]+|Label_\d+)$/;
+function isValidLabelId(id: string): boolean {
+  return LABEL_ID_REGEX.test(id) && id.length <= 64;
+}
+
+// Validate filter IDs (alphanumeric)
+const FILTER_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
+function isValidFilterId(id: string): boolean {
+  return FILTER_ID_REGEX.test(id) && id.length > 0 && id.length <= 64;
+}
+
+// Sanitize error messages to avoid leaking internal details
+function sanitizeError(err: unknown, context: string): string {
+  console.error(`${context}:`, err);
+  // Return generic message to client, log full error internally
+  if (err instanceof Error) {
+    // Only expose safe error messages
+    if (err.message.includes("not found") || err.message.includes("Not Found")) {
+      return `${context}: Resource not found`;
+    }
+    if (err.message.includes("Invalid") || err.message.includes("invalid")) {
+      return `${context}: Invalid request`;
+    }
+    if (err.message.includes("permission") || err.message.includes("Permission")) {
+      return `${context}: Permission denied`;
+    }
+  }
+  return `${context}: Operation failed. Check server logs for details.`;
+}
+
 const server = new McpServer({
   name: "gmail",
   version: "1.0.0"
@@ -128,7 +167,7 @@ server.tool(
 
       return { content: [{ type: "text", text: summary }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed to list emails: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to list emails") }] };
     }
   }
 );
@@ -142,6 +181,10 @@ server.tool(
   async ({ messageId }) => {
     if (!gmailClient) {
       return { content: [{ type: "text", text: "Not authenticated. Use gmail_auth_status first." }] };
+    }
+
+    if (!isValidMessageId(messageId)) {
+      return { content: [{ type: "text", text: "Invalid message ID format." }] };
     }
 
     try {
@@ -162,7 +205,7 @@ ${message.body || "(No body content)"}`;
 
       return { content: [{ type: "text", text: content }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed to get email: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to get email") }] };
     }
   }
 );
@@ -192,7 +235,7 @@ server.tool(
 
       return { content: [{ type: "text", text: `Found ${messages.length} emails:\n\n${summary}` }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Search failed: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Search failed") }] };
     }
   }
 );
@@ -211,6 +254,10 @@ server.tool(
   async ({ to, subject, body, replyToMessageId }) => {
     if (!gmailClient) {
       return { content: [{ type: "text", text: "Not authenticated. Use gmail_auth_status first." }] };
+    }
+
+    if (replyToMessageId && !isValidMessageId(replyToMessageId)) {
+      return { content: [{ type: "text", text: "Invalid reply message ID format." }] };
     }
 
     try {
@@ -234,7 +281,7 @@ server.tool(
         }]
       };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed to create draft: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to create draft") }] };
     }
   }
 );
@@ -263,7 +310,7 @@ server.tool(
 
       return { content: [{ type: "text", text: `${drafts.length} drafts:\n\n${summary}` }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed to list drafts: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to list drafts") }] };
     }
   }
 );
@@ -297,7 +344,7 @@ server.tool(
 
       return { content: [{ type: "text", text: output }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed to list labels: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to list labels") }] };
     }
   }
 );
@@ -317,7 +364,7 @@ server.tool(
       const label = await gmailClient.createLabel(name);
       return { content: [{ type: "text", text: `Label created: "${label.name}" (ID: ${label.id})` }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed to create label: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to create label") }] };
     }
   }
 );
@@ -335,11 +382,20 @@ server.tool(
       return { content: [{ type: "text", text: "Not authenticated. Use gmail_auth_status first." }] };
     }
 
+    if (!isValidMessageId(messageId)) {
+      return { content: [{ type: "text", text: "Invalid message ID format." }] };
+    }
+
+    const allLabels = [...(addLabels || []), ...(removeLabels || [])];
+    if (allLabels.some(id => !isValidLabelId(id))) {
+      return { content: [{ type: "text", text: "Invalid label ID format." }] };
+    }
+
     try {
       await gmailClient.modifyMessageLabels(messageId, addLabels || [], removeLabels || []);
       return { content: [{ type: "text", text: "Labels updated successfully." }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed to modify labels: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to modify labels") }] };
     }
   }
 );
@@ -376,7 +432,7 @@ server.tool(
 
       return { content: [{ type: "text", text: `${filters.length} filters:\n\n${summary}` }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed to list filters: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to list filters") }] };
     }
   }
 );
@@ -401,6 +457,11 @@ server.tool(
       return { content: [{ type: "text", text: "At least one filter criteria is required (from, to, subject, or query)." }] };
     }
 
+    const allLabels = [...(addLabelIds || []), ...(removeLabelIds || [])];
+    if (allLabels.some(id => !isValidLabelId(id))) {
+      return { content: [{ type: "text", text: "Invalid label ID format." }] };
+    }
+
     try {
       const filter = await gmailClient.createFilter({
         criteria: { from, to, subject, query },
@@ -408,7 +469,7 @@ server.tool(
       });
       return { content: [{ type: "text", text: `Filter created successfully! ID: ${filter.id}` }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed to create filter: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to create filter") }] };
     }
   }
 );
@@ -424,11 +485,15 @@ server.tool(
       return { content: [{ type: "text", text: "Not authenticated. Use gmail_auth_status first." }] };
     }
 
+    if (!isValidFilterId(filterId)) {
+      return { content: [{ type: "text", text: "Invalid filter ID format." }] };
+    }
+
     try {
       await gmailClient.deleteFilter(filterId);
       return { content: [{ type: "text", text: `Filter ${filterId} deleted.` }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed to delete filter: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to delete filter") }] };
     }
   }
 );
@@ -446,11 +511,15 @@ server.tool(
       return { content: [{ type: "text", text: "Not authenticated. Use gmail_auth_status first." }] };
     }
 
+    if (!isValidMessageId(messageId)) {
+      return { content: [{ type: "text", text: "Invalid message ID format." }] };
+    }
+
     try {
       await gmailClient.markAsRead(messageId);
       return { content: [{ type: "text", text: "Email marked as read." }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to mark as read") }] };
     }
   }
 );
@@ -466,11 +535,15 @@ server.tool(
       return { content: [{ type: "text", text: "Not authenticated. Use gmail_auth_status first." }] };
     }
 
+    if (!isValidMessageId(messageId)) {
+      return { content: [{ type: "text", text: "Invalid message ID format." }] };
+    }
+
     try {
       await gmailClient.markAsUnread(messageId);
       return { content: [{ type: "text", text: "Email marked as unread." }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Failed to mark as unread") }] };
     }
   }
 );
@@ -503,7 +576,7 @@ server.tool(
 
       return { content: [{ type: "text", text: `${messages.length} priority emails:\n\n${summary}` }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Operation failed") }] };
     }
   }
 );
@@ -547,7 +620,7 @@ server.tool(
         }]
       };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Operation failed") }] };
     }
   }
 );
@@ -598,7 +671,7 @@ server.tool(
         }]
       };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Operation failed") }] };
     }
   }
 );
@@ -657,7 +730,7 @@ server.tool(
 
       return { content: [{ type: "text", text: summary }] };
     } catch (err) {
-      return { content: [{ type: "text", text: `Failed: ${err instanceof Error ? err.message : String(err)}` }] };
+      return { content: [{ type: "text", text: sanitizeError(err, "Operation failed") }] };
     }
   }
 );

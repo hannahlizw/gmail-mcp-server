@@ -4,10 +4,18 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as http from "http";
 import { URL } from "url";
+import os from "os";
 
-const CONFIG_DIR = path.join(process.env.HOME || "~", ".gmail-mcp");
+const CONFIG_DIR = path.join(os.homedir(), ".gmail-mcp");
 const CREDENTIALS_PATH = path.join(CONFIG_DIR, "credentials.json");
 const TOKEN_PATH = path.join(CONFIG_DIR, "token.json");
+
+// Escape HTML to prevent XSS in error pages
+function escapeHtml(str: string): string {
+  return str.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] || c)
+  );
+}
 
 async function main() {
   console.log("=== Gmail MCP Server Setup ===\n");
@@ -88,7 +96,8 @@ async function main() {
       if (code) {
         try {
           const { tokens } = await oAuth2Client.getToken(code);
-          await fs.writeFile(TOKEN_PATH, JSON.stringify(tokens, null, 2));
+          // Write with restrictive permissions (owner read/write only) to protect OAuth tokens
+          await fs.writeFile(TOKEN_PATH, JSON.stringify(tokens, null, 2), { mode: 0o600 });
 
           res.writeHead(200, { "Content-Type": "text/html" });
           res.end("<h1>Authorization successful!</h1><p>You can close this window.</p>");
@@ -100,7 +109,8 @@ async function main() {
           process.exit(0);
         } catch (err) {
           res.writeHead(500, { "Content-Type": "text/html" });
-          res.end(`<h1>Error</h1><p>${err}</p>`);
+          // Escape error to prevent XSS
+          res.end(`<h1>Error</h1><p>${escapeHtml(String(err))}</p>`);
           console.error("Token exchange failed:", err);
         }
       } else {

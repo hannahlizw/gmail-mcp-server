@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import * as fs from "fs/promises";
 import * as path from "path";
+import os from "os";
 
 // Gmail API scopes needed for our operations
 const SCOPES = [
@@ -12,8 +13,8 @@ const SCOPES = [
   "https://www.googleapis.com/auth/gmail.settings.basic" // Read/create filters
 ];
 
-const TOKEN_PATH = path.join(process.env.HOME || "~", ".gmail-mcp", "token.json");
-const CREDENTIALS_PATH = path.join(process.env.HOME || "~", ".gmail-mcp", "credentials.json");
+const TOKEN_PATH = path.join(os.homedir(), ".gmail-mcp", "token.json");
+const CREDENTIALS_PATH = path.join(os.homedir(), ".gmail-mcp", "credentials.json");
 
 export async function ensureConfigDir(): Promise<void> {
   const configDir = path.dirname(TOKEN_PATH);
@@ -53,7 +54,8 @@ export async function loadToken(): Promise<{
 
 export async function saveToken(token: object): Promise<void> {
   await ensureConfigDir();
-  await fs.writeFile(TOKEN_PATH, JSON.stringify(token, null, 2));
+  // Write with restrictive permissions (owner read/write only) to protect OAuth tokens
+  await fs.writeFile(TOKEN_PATH, JSON.stringify(token, null, 2), { mode: 0o600 });
 }
 
 export async function getAuthenticatedClient(): Promise<OAuth2Client | null> {
