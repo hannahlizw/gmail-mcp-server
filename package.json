@@ -1,0 +1,30 @@
+{
+  "name": "gmail-mcp-server",
+  "version": "1.0.0",
+  "description": "Gmail MCP server for Claude Code",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "gmail-mcp": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "mcp",
+    "gmail",
+    "claude"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.3",
+    "googleapis": "^171.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "typescript": "^5.9.3"
+  }
+}
