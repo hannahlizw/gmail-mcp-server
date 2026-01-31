@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "setup": "npx tsx scripts/setup.ts"
   },
   "keywords": [
     "mcp",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.1.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }
