@@ -5,6 +5,7 @@ import {
   mockMessageResponse,
   mockMultipartMessageResponse,
   mockHtmlOnlyMessageResponse,
+  mockMessageListResponse,
   createMockGmailApi,
 } from "./mocks/gmail-api.js";
 
@@ -87,6 +88,57 @@ describe("GmailApiClient", () => {
       const result = await client.getMessage("msg123");
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("listMessages", () => {
+    it("returns array of parsed messages", async () => {
+      mockGmail.users.messages.list.mockResolvedValue(mockMessageListResponse);
+      mockGmail.users.messages.get.mockResolvedValue(mockMessageResponse);
+
+      const results = await client.listMessages({ maxResults: 10 });
+
+      expect(results).toHaveLength(2);
+      expect(results[0].id).toBe("msg123");
+      expect(mockGmail.users.messages.list).toHaveBeenCalledWith({
+        userId: "me",
+        maxResults: 10,
+        q: undefined,
+        labelIds: undefined,
+      });
+    });
+
+    it("passes query to API", async () => {
+      mockGmail.users.messages.list.mockResolvedValue({ data: { messages: [] } });
+
+      await client.listMessages({ query: "is:unread" });
+
+      expect(mockGmail.users.messages.list).toHaveBeenCalledWith(
+        expect.objectContaining({ q: "is:unread" })
+      );
+    });
+
+    it("returns empty array when no messages", async () => {
+      mockGmail.users.messages.list.mockResolvedValue({ data: { messages: undefined } });
+
+      const results = await client.listMessages();
+
+      expect(results).toEqual([]);
+    });
+  });
+
+  describe("searchMessages", () => {
+    it("passes query to listMessages", async () => {
+      mockGmail.users.messages.list.mockResolvedValue({ data: { messages: [] } });
+
+      await client.searchMessages("from:test@example.com", 5);
+
+      expect(mockGmail.users.messages.list).toHaveBeenCalledWith(
+        expect.objectContaining({
+          q: "from:test@example.com",
+          maxResults: 5,
+        })
+      );
     });
   });
 });
